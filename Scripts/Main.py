@@ -9,10 +9,8 @@ from Utility        import *
 
 def setupGpio(gpio:GpioManager):
     gpio.setup(MOTOR_PIN, True)
-    gpio.setup(ULTRASONIC_EMPTY_TRIG, True)
-    gpio.setup(ULTRASONIC_EMPTY_ECHO, False)
-    gpio.setup(ULTRASONIC_FULL_TRIG, True)
-    gpio.setup(ULTRASONIC_FULL_ECHO, False)
+    gpio.setup(ULTRASONIC_TRIG, True)
+    gpio.setup(ULTRASONIC_ECHO, False)
     gpio.output(MOTOR_PIN, False)
 
 
@@ -63,10 +61,9 @@ def main():
         while True:
             currentTime = time.time()
             if currentTime - lastCheckTime >= CHECK_INTERVAL_SECONDS:
-                emptyDistance = readDistance(gpio, ULTRASONIC_EMPTY_TRIG, ULTRASONIC_EMPTY_ECHO)
-                fullDistance = readDistance(gpio, ULTRASONIC_FULL_TRIG, ULTRASONIC_FULL_ECHO)
-                print(f"Empty Distance: {emptyDistance} cm, Full Distance: {fullDistance} cm")
-                waterLevel = TANK_HEIGHT - emptyDistance
+                distance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
+                print(f"Distance: {distance} cm")
+                waterLevel = TANK_HEIGHT - distance
                 now = datetime.now()
                 rtDb = readRtDb()
                 configUpdateAvailable = rtDb.get("configUpdateAvailable", False)
@@ -107,11 +104,11 @@ def main():
                                 gpio.output(MOTOR_PIN, True)
                                 motorStatus = "ON"
                                 print("Pre-night filling in progress...")
-                        elif fullDistance < 5:
+                        elif distance < TOP_EMPTY_DISTANCE: # Assuming sensor is at the top. Small distance means full.
                             gpio.output(MOTOR_PIN, False)
                             motorStatus = "OFF"
                             print("Tank full: Motor OFF")
-                        elif emptyDistance > (TANK_HEIGHT - 5):
+                        elif distance > (TANK_HEIGHT - BOTTOM_FULL_DISTANCE): # Large distance means empty
                             gpio.output(MOTOR_PIN, True)
                             motorStatus = "ON"
                             print("Tank empty: Motor ON")
