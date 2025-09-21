@@ -8,7 +8,7 @@ class GpioManager:
     def __init__(self):
         if RPI_ENV:
             print("Running on Raspberry Pi environment.")
-            GPIO.setmode(GPIO.BCM)
+            GPIO.setmode(GPIO.BOARD)
         else:
             print("Running in a non-Raspberry Pi environment. GPIO operations will be simulated.")
         self.state = {}
