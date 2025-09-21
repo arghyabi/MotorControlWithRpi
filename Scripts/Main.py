@@ -20,25 +20,28 @@ def cleanupGpio(gpio:GpioManager):
 
 
 def readDistance(gpio:GpioManager, trig, echo):
+    # Ensure trigger is low
     gpio.output(trig, False)
     time.sleep(0.05)
+
+    # Send a 10us pulse to trigger
     gpio.output(trig, True)
     time.sleep(0.00001)
     gpio.output(trig, False)
 
-    pulseStart = None
-    pulseEnd = None
-    timeout = time.time() + 1
+    # Wait for the echo pin to go high
+    startTime = time.monotonic()
     while gpio.input(echo) == 0:
-        pulseStart = time.time()
-        if time.time() > timeout:
-            return -1
+        if time.monotonic() - startTime > 1:
+            return -1  # Timeout waiting for echo to start
+    pulseStart = time.monotonic()
+
+    # Wait for the echo pin to go low
     while gpio.input(echo) == 1:
-        pulseEnd = time.time()
-        if time.time() > timeout:
-            return -1
-    if pulseStart is None or pulseEnd is None:
-        return -1
+        if time.monotonic() - pulseStart > 1:
+            return -1  # Timeout waiting for echo to end
+    pulseEnd = time.monotonic()
+
     pulseDuration = pulseEnd - pulseStart
     distance = pulseDuration * 17150
     distance = round(distance, 2)
