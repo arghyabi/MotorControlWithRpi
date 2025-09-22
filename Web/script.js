@@ -15,6 +15,10 @@ function fetchStatus() {
                 toggleBtn.classList.remove('on');
             }
             toggleBtn.disabled = false;
+
+            // Update dropdowns and selected values
+            updateConfigValue('valve1Duration', data.valve1Duration);
+            updateConfigValue('valve2Duration', data.valve2Duration);
         })
         .catch(err => {
             document.getElementById('tankLevel').textContent = 'Error';
@@ -40,6 +44,40 @@ function setMotor(status) {
         });
 }
 
+function setConfig(key, value) {
+    fetch('motor.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `${key}=${value}`
+    })
+        .then(res => res.json())
+        .then(() => fetchStatus())
+        .catch(err => {
+            alert('Failed to set config. Network error.');
+            fetchStatus();
+            console.error('Set config error:', err);
+        });
+}
+
+function populateDropdown(selectId) {
+    const select = document.getElementById(selectId);
+    for (let i = 1; i <= 15; i++) {
+        const option = document.createElement('option');
+        option.value = i;
+        option.textContent = `${i} min`;
+        select.appendChild(option);
+    }
+}
+
+function updateConfigValue(id, value) {
+    const select = document.getElementById(id);
+    const selectedSpan = document.getElementById(`selected${id.charAt(0).toUpperCase() + id.slice(1)}`);
+    if (value) {
+        select.value = value;
+        selectedSpan.textContent = `${value} min`;
+    }
+}
+
 const motorToggleBtn = document.getElementById('motorToggleBtn');
 motorToggleBtn.onclick = function() {
     motorToggleBtn.disabled = true;
@@ -49,6 +87,19 @@ motorToggleBtn.onclick = function() {
         setMotor('ON');
     }
 };
+
+// Populate dropdowns
+populateDropdown('valve1Duration');
+populateDropdown('valve2Duration');
+
+// Add event listeners for dropdowns
+document.getElementById('valve1Duration').addEventListener('change', function() {
+    setConfig('valve1Duration', this.value);
+});
+
+document.getElementById('valve2Duration').addEventListener('change', function() {
+    setConfig('valve2Duration', this.value);
+});
 
 fetchStatus();
 setInterval(fetchStatus, 3000);

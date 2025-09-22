@@ -11,11 +11,18 @@ def setupGpio(gpio:GpioManager):
     gpio.setup(MOTOR_PIN, True)
     gpio.setup(ULTRASONIC_TRIG, True)
     gpio.setup(ULTRASONIC_ECHO, False)
+    gpio.setup(VALVE1_PIN, True)
+    gpio.setup(VALVE2_PIN, True)
+
     gpio.output(MOTOR_PIN, False)
+    gpio.output(VALVE1_PIN, False)
+    gpio.output(VALVE2_PIN, False)
 
 
 def cleanupGpio(gpio:GpioManager):
     gpio.output(MOTOR_PIN, False)
+    gpio.output(VALVE1_PIN, False)
+    gpio.output(VALVE2_PIN, False)
     gpio.cleanup()
 
 
@@ -51,25 +58,90 @@ def readDistance(gpio:GpioManager, trig, echo):
 def isNightTime():
     now = datetime.now()
     hour = now.hour
-    return hour >= 22 or hour < 7
+    return hour >= NIGHT_10PM or hour < MORNING_7AM
 
 
 def main():
     gpio = GpioManager()
     setupGpio(gpio)
+
+    # Default valves and durations
+    valve1Duration  = VALVE1_DEFAULT_DURATION
+    valve2Duration  = VALVE2_DEFAULT_DURATION
+    valve1On        = False
+    valve2On        = False
+    valve1StartTime = 0
+    valve2StartTime = 0
+    morningRunDone  = False
+    eveningRunDone  = False
+    motorStatus     = "OFF"
+    lastMotorStatus = "OFF"
+    waterLevel      = 0
+    lastWaterLevel  = 0
+    lastDay         = datetime.now().day
+
     try:
         lastCheckTime = time.time()
         preNightFillActive = False
         preNightFillStart = None
         while True:
             currentTime = time.time()
+            now = datetime.now()
+
+            # Reset daily flags
+            if now.day != lastDay:
+                morningRunDone = False
+                eveningRunDone = False
+                lastDay = now.day
+
+            rtDb = readRtDb()
+            configUpdateAvailable = rtDb.get("configUpdateAvailable", False)
+
+            # Check for config updates for valves
+            if configUpdateAvailable:
+                valve1Duration = rtDb.get("valve1Duration", VALVE1_DEFAULT_DURATION)
+                valve2Duration = rtDb.get("valve2Duration", VALVE2_DEFAULT_DURATION)
+                print(f"Updated valve durations: Valve1={valve1Duration} min, Valve2={valve2Duration} min")
+
+            # Morning valve operation
+            if now.hour == MORNING_8AM and not morningRunDone:
+                print("Morning run: Activating valves.")
+                gpio.output(VALVE1_PIN, True)
+                gpio.output(VALVE2_PIN, True)
+                valve1On = True
+                valve2On = True
+                valve1StartTime = currentTime
+                valve2StartTime = currentTime
+                morningRunDone = True
+
+            # Evening valve operation
+            if now.hour == EVENING_8PM and not eveningRunDone:
+                print("Evening run: Activating valves.")
+                gpio.output(VALVE1_PIN, True)
+                gpio.output(VALVE2_PIN, True)
+                valve1On = True
+                valve2On = True
+                valve1StartTime = currentTime
+                valve2StartTime = currentTime
+                eveningRunDone = True
+
+            # Check to turn off valves
+            if valve1On and (currentTime - valve1StartTime >= valve1Duration * 60):
+                gpio.output(VALVE1_PIN, False)
+                valve1On = False
+                print("Valve 1 duration complete. Turned off.")
+
+            if valve2On and (currentTime - valve2StartTime >= valve2Duration * 60):
+                gpio.output(VALVE2_PIN, False)
+                valve2On = False
+                print("Valve 2 duration complete. Turned off.")
+
+            # Original motor logic
             if currentTime - lastCheckTime >= CHECK_INTERVAL_SECONDS:
                 distance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
                 print(f"Distance: {distance} cm")
                 waterLevel = TANK_HEIGHT - distance
-                now = datetime.now()
                 rtDb = readRtDb()
-                configUpdateAvailable = rtDb.get("configUpdateAvailable", False)
                 motorStatus = rtDb.get("motorStatus", "OFF")
 
                 if configUpdateAvailable:
@@ -80,18 +152,16 @@ def main():
                     else:
                         gpio.output(MOTOR_PIN, False)
                         print("Config update: Motor OFF")
-                    # Reset configUpdateAvailable after applying
-                    writeRtDb(motorStatus=motorStatus, tankLevel=waterLevel, configUpdateAvailable=False)
                 else:
                     # Automatic logic
                     motorStatus = "OFF"
-                    if isNightTime():
+                    if isNightTime(): # Check if it's night time between 10 PM and 7 AM
                         gpio.output(MOTOR_PIN, False)
                         motorStatus = "OFF"
                         print("Night time: Motor OFF")
                         preNightFillActive = False
                     else:
-                        if now.hour == 21 and waterLevel < ONE_THIRD_LEVEL and not preNightFillActive:
+                        if now.hour == NIGHT_9PM and waterLevel < ONE_THIRD_LEVEL and not preNightFillActive:
                             print("Pre-night: Water < 1/3, filling tank...")
                             gpio.output(MOTOR_PIN, True)
                             motorStatus = "ON"
@@ -119,10 +189,15 @@ def main():
                             gpio.output(MOTOR_PIN, False)
                             motorStatus = "OFF"
                             print("Tank level OK: Motor OFF")
-                    writeRtDb(motorStatus=motorStatus, tankLevel=waterLevel, configUpdateAvailable=False)
+
                 lastCheckTime = currentTime
-            time.sleep(0.1)
-            # Short sleep to reduce CPU usage and maintain responsiveness
+
+            if configUpdateAvailable or motorStatus != lastMotorStatus or waterLevel != lastWaterLevel:
+                writeRtDb(motorStatus = motorStatus, tankLevel = waterLevel, configUpdateAvailable = False)
+                lastMotorStatus = motorStatus
+                lastWaterLevel  = waterLevel
+
+            time.sleep(0.1) # Sleep to reduce CPU usage
     except KeyboardInterrupt:
         cleanupGpio(gpio)
 
