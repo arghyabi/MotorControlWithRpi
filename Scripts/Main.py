@@ -72,8 +72,9 @@ def main():
     valve2On        = False
     valve1StartTime = 0
     valve2StartTime = 0
-    morningRunDone  = False
-    eveningRunDone  = False
+    morning8RunDone = False
+    aftrn5RunDone   = False
+    evening9RunDone = False
     motorStatus     = "OFF"
     lastMotorStatus = "OFF"
     waterLevel      = 0
@@ -90,8 +91,9 @@ def main():
 
             # Reset daily flags
             if now.day != lastDay:
-                morningRunDone = False
-                eveningRunDone = False
+                morning8RunDone = False
+                evening9RunDone = False
+                aftrn5RunDone   = False
                 lastDay = now.day
 
             rtDb = readRtDb()
@@ -104,7 +106,7 @@ def main():
                 print(f"Updated valve durations: Valve1={valve1Duration} min, Valve2={valve2Duration} min")
 
             # Morning valve operation
-            if now.hour == MORNING_8AM and not morningRunDone:
+            if now.hour == MORNING_8AM and not morning8RunDone:
                 print("Morning run: Activating valves.")
                 gpio.output(VALVE1_PIN, True)
                 gpio.output(VALVE2_PIN, True)
@@ -112,10 +114,21 @@ def main():
                 valve2On = True
                 valve1StartTime = currentTime
                 valve2StartTime = currentTime
-                morningRunDone = True
+                morning8RunDone = True
+
+            # Afternoon valve operation
+            if now.hour == AFTERNOON_5PM and not aftrn5RunDone:
+                print("Afternoon run: Activating valves.")
+                gpio.output(VALVE1_PIN, True)
+                gpio.output(VALVE2_PIN, True)
+                valve1On = True
+                valve2On = True
+                valve1StartTime = currentTime
+                valve2StartTime = currentTime
+                aftrn5RunDone = True
 
             # Evening valve operation
-            if now.hour == EVENING_8PM and not eveningRunDone:
+            if now.hour == NIGHT_9PM and not evening9RunDone:
                 print("Evening run: Activating valves.")
                 gpio.output(VALVE1_PIN, True)
                 gpio.output(VALVE2_PIN, True)
@@ -123,7 +136,7 @@ def main():
                 valve2On = True
                 valve1StartTime = currentTime
                 valve2StartTime = currentTime
-                eveningRunDone = True
+                evening9RunDone = True
 
             # Check to turn off valves
             if valve1On and (currentTime - valve1StartTime >= valve1Duration * 60):
@@ -156,9 +169,7 @@ def main():
                     # Automatic logic
                     motorStatus = "OFF"
                     if isNightTime(): # Check if it's night time between 10 PM and 7 AM
-                        gpio.output(MOTOR_PIN, False)
-                        motorStatus = "OFF"
-                        print("Night time: Motor OFF")
+                        print("Night time: Automatic motor control disabled. Only manual control available!")
                         preNightFillActive = False
                     else:
                         if now.hour == NIGHT_9PM and waterLevel < ONE_THIRD_LEVEL and not preNightFillActive:

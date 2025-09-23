@@ -32,6 +32,7 @@ MAX_PRE_NIGHT_FILL_TIME = 600
 
 MORNING_7AM             = 7
 MORNING_8AM             = 8
+AFTERNOON_5PM           = 17
 EVENING_7PM             = 19
 EVENING_8PM             = 20
 NIGHT_10PM              = 22
