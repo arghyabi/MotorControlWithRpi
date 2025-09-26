@@ -84,8 +84,9 @@ def main():
     try:
         lastCheckTime = time.time()
         preNightFillActive = False
-        preNightFillStart = None
+        preNightFillStartTime = None
         while True:
+            print("Main loop iteration...")
             currentTime = time.time()
             now = datetime.now()
 
@@ -154,7 +155,6 @@ def main():
                 distance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
                 print(f"Distance: {distance} cm")
                 waterLevel = TANK_HEIGHT - distance
-                rtDb = readRtDb()
                 motorStatus = rtDb.get("motorStatus", "OFF")
 
                 if configUpdateAvailable:
@@ -166,20 +166,18 @@ def main():
                         gpio.output(MOTOR_PIN, False)
                         print("Config update: Motor OFF")
                 else:
-                    # Automatic logic
-                    motorStatus = "OFF"
                     if isNightTime(): # Check if it's night time between 10 PM and 7 AM
                         print("Night time: Automatic motor control disabled. Only manual control available!")
                         preNightFillActive = False
                     else:
-                        if now.hour == NIGHT_9PM and waterLevel < ONE_THIRD_LEVEL and not preNightFillActive:
-                            print("Pre-night: Water < 1/3, filling tank...")
+                        if now.hour == NIGHT_9PM and ifWaterLevelBelowTwoThird(waterLevel) and not preNightFillActive:
+                            print(f"Pre-night: Water < 2/3, filling tank for {MAX_PRE_NIGHT_FILL_TIME} seconds...")
                             gpio.output(MOTOR_PIN, True)
                             motorStatus = "ON"
                             preNightFillActive = True
-                            preNightFillStart = currentTime
-                        elif preNightFillActive:
-                            if waterLevel >= TANK_HEIGHT or (preNightFillStart is not None and currentTime - preNightFillStart > MAX_PRE_NIGHT_FILL_TIME):
+                            preNightFillStartTime = currentTime
+                        elif preNightFillActive and (preNightFillStartTime is not None):
+                            if ifWaterLevelAboveMax(waterLevel) or ((currentTime - preNightFillStartTime) > MAX_PRE_NIGHT_FILL_TIME):
                                 gpio.output(MOTOR_PIN, False)
                                 motorStatus = "OFF"
                                 print("Tank filled before night.")
@@ -188,11 +186,11 @@ def main():
                                 gpio.output(MOTOR_PIN, True)
                                 motorStatus = "ON"
                                 print("Pre-night filling in progress...")
-                        elif distance < TOP_EMPTY_DISTANCE: # Assuming sensor is at the top. Small distance means full.
+                        elif ifWaterLevelAboveMax(waterLevel): # Assuming sensor is at the top. Small distance means full.
                             gpio.output(MOTOR_PIN, False)
                             motorStatus = "OFF"
                             print("Tank full: Motor OFF")
-                        elif distance > (TANK_HEIGHT - BOTTOM_FULL_DISTANCE): # Large distance means empty
+                        elif ifWaterLevelBelowMin(waterLevel): # Large distance means empty
                             gpio.output(MOTOR_PIN, True)
                             motorStatus = "ON"
                             print("Tank empty: Motor ON")
