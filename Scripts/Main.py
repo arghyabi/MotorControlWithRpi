@@ -205,20 +205,22 @@ def main():
 
             # Original motor logic
             if currentTime - lastCheckTime >= CHECK_INTERVAL_SECONDS:
-                distance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
-                if distanceIsValid(distance, lastDistance):
-                    print(f"Distance: {distance} cm")
-                    lastDistance = distance
-                else:
-                    print(f"Invalid distance reading: {distance} cm; SKIP;")
-                    time.sleep(0.5)
-                    continue
+                while True:
+                    distance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
+                    if distanceIsValid(distance, lastDistance):
+                        print(f"Distance: {distance} cm")
+                        lastDistance = distance
+                        break
+                    else:
+                        print(f"Invalid distance reading: {distance} cm; SKIP;")
+                        time.sleep(0.5)
+
                 waterLevel = TANK_HEIGHT - distance
                 motorStatus = rtDb.get("motorStatus", "OFF")
 
 
                 if configUpdateAvailable:
-                    # Apply config from rtDb.json
+                    # Apply config from rtDb.json both for Manual and Auto modes
                     if motorStatus == "ON":
                         gpio.output(MOTOR_PIN, True)
                         print(f"{currentMode} mode - Config update: Motor ON")
@@ -260,9 +262,7 @@ def main():
                             motorStatus = "ON"
                             print("Auto mode - Tank empty: Motor ON")
                         else:
-                            gpio.output(MOTOR_PIN, False)
-                            motorStatus = "OFF"
-                            print("Auto mode - Tank level OK: Motor OFF")
+                            print(f"Auto mode - Tank level OK: No Motor Update; Currently Motor {motorStatus}")
                 else:
                     print(f"Unknown mode '{currentMode}', defaulting to Auto mode behavior")
                     writeRtDb(mode = "Auto")
