@@ -7,6 +7,14 @@ function fetchStatus() {
                 (typeof data.tankLevel === 'number') ? `${data.tankLevel} cm` : 'Unknown';
             document.getElementById('motorStatus').textContent =
                 data.motorStatus === 'ON' ? 'ON' : 'OFF';
+
+            // Update mode display
+            const mode = data.mode || 'Auto';
+            updateModeValue(mode);
+
+            // Control motor button based on mode
+            const isManualMode = mode === 'Manual';
+
             if (data.motorStatus === 'ON') {
                 toggleBtn.textContent = 'Turn Motor OFF';
                 toggleBtn.classList.add('on');
@@ -14,7 +22,15 @@ function fetchStatus() {
                 toggleBtn.textContent = 'Turn Motor ON';
                 toggleBtn.classList.remove('on');
             }
-            toggleBtn.disabled = false;
+
+            // Enable/disable motor button based on mode
+            toggleBtn.disabled = !isManualMode;
+
+            if (!isManualMode) {
+                toggleBtn.title = 'Motor control is disabled in Auto mode';
+            } else {
+                toggleBtn.title = '';
+            }
 
             // Update dropdowns and selected values
             updateConfigValue('valve1Duration', data.valve1Duration);
@@ -78,6 +94,15 @@ function updateConfigValue(id, value) {
     }
 }
 
+function updateModeValue(mode) {
+    const select = document.getElementById('modeSelect');
+    const selectedSpan = document.getElementById('selectedMode');
+    if (mode) {
+        select.value = mode;
+        selectedSpan.textContent = mode;
+    }
+}
+
 const motorToggleBtn = document.getElementById('motorToggleBtn');
 motorToggleBtn.onclick = function() {
     motorToggleBtn.disabled = true;
@@ -99,6 +124,11 @@ document.getElementById('valve1Duration').addEventListener('change', function() 
 
 document.getElementById('valve2Duration').addEventListener('change', function() {
     setConfig('valve2Duration', this.value);
+});
+
+// Add event listener for mode selection
+document.getElementById('modeSelect').addEventListener('change', function() {
+    setConfig('mode', this.value);
 });
 
 fetchStatus();

@@ -65,7 +65,12 @@ def isNightTime():
 def main():
     gpio = GpioManager()
     setupGpio(gpio)
-    lastDistance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
+    print("System initialized. Checking Database...")
+
+    rtDb = readRtDb()
+    if rtDb == {}:
+        print(f"No Database found; Create new Database...")
+        writeRtDb(motorStatus="OFF", tankLevel=TANK_HEIGHT, configUpdateAvailable=True, mode="Auto")
 
     # Default valves and durations
     valve1Duration  = VALVE1_DEFAULT_DURATION
@@ -81,7 +86,14 @@ def main():
     lastMotorStatus = "OFF"
     waterLevel      = 0
     lastWaterLevel  = 0
+    lastDistance    = 0
     lastDay         = datetime.now().day
+
+    print("Reading initial distance...")
+    while lastDistance <= 0:
+        time.sleep(1)
+        lastDistance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
+        print(f"Initial distance: {lastDistance} cm")
 
     try:
         lastCheckTime = time.time()
@@ -135,13 +147,17 @@ def main():
                     print("Processing config update from web interface")
             # If no read needed, use cached rtDb (already initialized above)
 
-            # Check for config updates for valves
+            # Check for config updates for valves and mode
             if configUpdateAvailable:
                 valve1Duration = rtDb.get("valve1Duration", VALVE1_DEFAULT_DURATION)
                 valve2Duration = rtDb.get("valve2Duration", VALVE2_DEFAULT_DURATION)
                 print(f"Updated valve durations: Valve1 = {valve1Duration} min, Valve2 = {valve2Duration} min")
 
+            # Get current mode (default to Auto for backward compatibility)
+            currentMode = rtDb.get("mode", "Auto")
+
             # Only check for scheduled valve operations once per minute to reduce processing
+            # Valves operate regardless of mode (they have their own schedule)
             if now.second == 0:  # Only check at the beginning of each minute
                 # Morning valve operation
                 if now.hour == MORNING_8AM and not morning8RunDone:
@@ -200,21 +216,26 @@ def main():
                 waterLevel = TANK_HEIGHT - distance
                 motorStatus = rtDb.get("motorStatus", "OFF")
 
+
                 if configUpdateAvailable:
                     # Apply config from rtDb.json
                     if motorStatus == "ON":
                         gpio.output(MOTOR_PIN, True)
-                        print("Config update: Motor ON")
+                        print(f"{currentMode} mode - Config update: Motor ON")
                     else:
                         gpio.output(MOTOR_PIN, False)
-                        print("Config update: Motor OFF")
-                else:
+                        print(f"{currentMode} mode - Config update: Motor OFF")
+                # In manual mode, don't change motor status automatically
+
+
+                elif currentMode == "Auto":
+                    # Standard automatic control logic
                     if isNightTime(): # Check if it's night time between 10 PM and 7 AM
-                        print("Night time: Automatic motor control disabled. Only manual control available!")
+                        print("Auto mode - Night time: Automatic motor control disabled. Only manual control available!")
                         preNightFillActive = False
                     else:
                         if now.hour == NIGHT_9PM and ifWaterLevelBelowTwoThird(waterLevel) and not preNightFillActive:
-                            print(f"Pre-night: Water < 2/3, filling tank for {MAX_PRE_NIGHT_FILL_TIME} seconds...")
+                            print(f"Auto mode - Pre-night: Water < 2/3, filling tank for {MAX_PRE_NIGHT_FILL_TIME} seconds...")
                             gpio.output(MOTOR_PIN, True)
                             motorStatus = "ON"
                             preNightFillActive = True
@@ -223,24 +244,27 @@ def main():
                             if ifWaterLevelAboveMax(waterLevel) or ((currentTime - preNightFillStartTime) > MAX_PRE_NIGHT_FILL_TIME):
                                 gpio.output(MOTOR_PIN, False)
                                 motorStatus = "OFF"
-                                print("Tank filled before night.")
+                                print("Auto mode - Tank filled before night.")
                                 preNightFillActive = False
                             else:
                                 gpio.output(MOTOR_PIN, True)
                                 motorStatus = "ON"
-                                print("Pre-night filling in progress...")
+                                print("Auto mode - Pre-night filling in progress...")
                         elif ifWaterLevelAboveMax(waterLevel): # Assuming sensor is at the top. Small distance means full.
                             gpio.output(MOTOR_PIN, False)
                             motorStatus = "OFF"
-                            print("Tank full: Motor OFF")
+                            print("Auto mode - Tank full: Motor OFF")
                         elif ifWaterLevelBelowMin(waterLevel): # Large distance means empty
                             gpio.output(MOTOR_PIN, True)
                             motorStatus = "ON"
-                            print("Tank empty: Motor ON")
+                            print("Auto mode - Tank empty: Motor ON")
                         else:
                             gpio.output(MOTOR_PIN, False)
                             motorStatus = "OFF"
-                            print("Tank level OK: Motor OFF")
+                            print("Auto mode - Tank level OK: Motor OFF")
+                else:
+                    print(f"Unknown mode '{currentMode}', defaulting to Auto mode behavior")
+                    writeRtDb(mode = "Auto")
 
                 lastCheckTime = currentTime
 
