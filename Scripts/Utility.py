@@ -52,7 +52,7 @@ def ifWaterLevelAboveMax(waterLevel):
 def ifWaterLevelBelowMin(waterLevel):
     # Allow a margin of +/- 5 cm around BOTTOM_FULL_DISTANCE for consistency (hysteresis)
     margin = 5
-    minLevel = TANK_HEIGHT - BOTTOM_FULL_DISTANCE
+    minLevel = BOTTOM_FULL_DISTANCE
     if waterLevel < (minLevel - margin):
         return True
     elif waterLevel > (minLevel + margin):
