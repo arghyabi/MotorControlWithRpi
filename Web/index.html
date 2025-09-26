@@ -8,6 +8,18 @@
 </head>
 <body>
   <div class="container">
+    <h2>Control Mode</h2>
+    <div class="mode-group">
+      <label for="modeSelect">Mode:</label>
+      <select id="modeSelect">
+        <option value="Auto">Auto</option>
+        <option value="Manual">Manual</option>
+      </select>
+      <p>Selected: <span id="selectedMode">Loading...</span></p>
+    </div>
+  </div>
+
+  <div class="container">
     <h2>Tank Water Status</h2>
     <div id="tankLevel" class="status-box">Loading...</div>
     <h2>Motor Status</h2>

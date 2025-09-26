@@ -12,6 +12,7 @@ function getStatus() {
         "tankLevel"             => isset($data['tankLevel'])             ? $data['tankLevel']             : 0,
         "valve1Duration"        => isset($data['valve1Duration'])        ? $data['valve1Duration']        : 1,
         "valve2Duration"        => isset($data['valve2Duration'])        ? $data['valve2Duration']        : 1,
+        "mode"                  => isset($data['mode'])                  ? $data['mode']                  : 'Auto',
         "configUpdateAvailable" => isset($data['configUpdateAvailable']) ? $data['configUpdateAvailable'] : false
     ];
 }
@@ -46,6 +47,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(setConfig('valve1Duration', (int)$_POST['valve1Duration']));
     } elseif (isset($_POST['valve2Duration'])) {
         echo json_encode(setConfig('valve2Duration', (int)$_POST['valve2Duration']));
+    } elseif (isset($_POST['mode'])) {
+        $mode = $_POST['mode'] === 'Auto' ? 'Auto' : 'Manual';
+        echo json_encode(setConfig('mode', $mode));
     }
 } else {
     echo json_encode(getStatus());

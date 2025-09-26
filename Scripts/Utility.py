@@ -10,7 +10,7 @@ def readRtDb():
         return {}
 
 
-def writeRtDb(motorStatus=None, tankLevel=None, configUpdateAvailable=None):
+def writeRtDb(motorStatus=None, tankLevel=None, configUpdateAvailable=None, mode=None):
     db = readRtDb()
     if motorStatus is not None:
         db["motorStatus"] = motorStatus
@@ -18,6 +18,8 @@ def writeRtDb(motorStatus=None, tankLevel=None, configUpdateAvailable=None):
         db["tankLevel"] = tankLevel
     if configUpdateAvailable is not None:
         db["configUpdateAvailable"] = configUpdateAvailable
+    if mode is not None:
+        db["mode"] = mode
     try:
         with open(RT_DB_FILE, 'w') as f:
             json.dump(db, f)
