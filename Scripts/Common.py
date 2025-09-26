@@ -49,7 +49,7 @@ BOTTOM_FULL_DISTANCE    = 30
 MAX_WATER_LEVEL         = TANK_HEIGHT - TOP_EMPTY_DISTANCE
 TWO_THIRD_LEVEL         = MAX_WATER_LEVEL // 3 * 2  # Two-thirds full level
 
-CHECK_INTERVAL_SECONDS  = 5  # Check distance every 5 seconds
+CHECK_INTERVAL_SECONDS  = 0.5  # Check distance every 0.5 seconds
 MAX_PRE_NIGHT_FILL_TIME = 600
 
 NIGHT_12AM              = 0

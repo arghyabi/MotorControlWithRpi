@@ -171,7 +171,7 @@ def main():
                     morning8RunDone = True
 
                 # Afternoon valve operation
-                if now.hour == AFTERNOON_5PM and not aftrn5RunDone:
+                if now.hour == NOON_12PM and not aftrn5RunDone:
                     print("Afternoon run: Activating valves.")
                     gpio.output(VALVE1_PIN, True)
                     gpio.output(VALVE2_PIN, True)
@@ -182,7 +182,7 @@ def main():
                     aftrn5RunDone = True
 
                 # Evening valve operation
-                if now.hour == NIGHT_9PM and not evening9RunDone:
+                if now.hour == AFTERNOON_5PM and not evening9RunDone:
                     print("Evening run: Activating valves.")
                     gpio.output(VALVE1_PIN, True)
                     gpio.output(VALVE2_PIN, True)
@@ -217,16 +217,17 @@ def main():
 
                 waterLevel = TANK_HEIGHT - distance
                 motorStatus = rtDb.get("motorStatus", "OFF")
+                print(f"!!!! Motor Status {motorStatus}; Config Update Available: {configUpdateAvailable} !!!!")
 
 
                 if configUpdateAvailable:
                     # Apply config from rtDb.json both for Manual and Auto modes
                     if motorStatus == "ON":
                         gpio.output(MOTOR_PIN, True)
-                        print(f"{currentMode} mode - Config update: Motor ON")
+                        print(f">>> {currentMode} mode - Config update: Motor ON")
                     else:
                         gpio.output(MOTOR_PIN, False)
-                        print(f"{currentMode} mode - Config update: Motor OFF")
+                        print(f">>> {currentMode} mode - Config update: Motor OFF")
 
                 if currentMode == "Manual":
                     pass
@@ -269,10 +270,19 @@ def main():
 
                 lastCheckTime = currentTime
 
-            if configUpdateAvailable or motorStatus != lastMotorStatus or waterLevel != lastWaterLevel:
-                writeRtDb(motorStatus = motorStatus, tankLevel = waterLevel, configUpdateAvailable = False)
+            # Update database if there are changes
+            dbUpdates = {}
+            if motorStatus != lastMotorStatus:
+                dbUpdates["motorStatus"] = motorStatus
                 lastMotorStatus = motorStatus
-                lastWaterLevel  = waterLevel
+
+            if waterLevel != lastWaterLevel:
+                dbUpdates["tankLevel"] = waterLevel
+                lastWaterLevel = waterLevel
+
+            if dbUpdates:
+                print(f"Updating DB with: {dbUpdates}")
+                writeRtDb(**dbUpdates)
 
             # Smart sleep: shorter sleep when config updates are expected
             if configUpdateAvailable:
