@@ -57,3 +57,13 @@ def ifWaterLevelBelowMin(waterLevel):
         return False
     else:
         return False
+
+
+def distanceIsValid(distance, lastDistance):
+    if distance <= 0:
+        return False
+    if lastDistance > 0:
+        change = abs(distance - lastDistance)
+        if change / lastDistance > 0.1:  # More than 10% change
+            return False
+    return True
