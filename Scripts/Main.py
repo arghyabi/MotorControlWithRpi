@@ -1,5 +1,6 @@
 from GpioManager import GpioManager
 import time
+import os
 from datetime import datetime
 
 from PinDescription import *
@@ -64,6 +65,7 @@ def isNightTime():
 def main():
     gpio = GpioManager()
     setupGpio(gpio)
+    lastDistance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
 
     # Default valves and durations
     valve1Duration  = VALVE1_DEFAULT_DURATION
@@ -83,10 +85,19 @@ def main():
 
     try:
         lastCheckTime = time.time()
+        lastRtDbCheck = time.time()
         preNightFillActive = False
         preNightFillStartTime = None
+
+        # File modification tracking for efficient change detection
+        lastRtDbModTime = 0
+        rtDb = readRtDb()  # Initial read
+        try:
+            lastRtDbModTime = os.path.getmtime(RT_DB_FILE)
+        except OSError:
+            pass
+
         while True:
-            print("Main loop iteration...")
             currentTime = time.time()
             now = datetime.now()
 
@@ -97,47 +108,73 @@ def main():
                 aftrn5RunDone   = False
                 lastDay = now.day
 
-            rtDb = readRtDb()
-            configUpdateAvailable = rtDb.get("configUpdateAvailable", False)
+            # Efficient database change detection using file modification time
+            configUpdateAvailable = False
+            needsDbRead = False
+
+            # Check if file has been modified (lightweight operation)
+            try:
+                currentModTime = os.path.getmtime(RT_DB_FILE)
+                if currentModTime != lastRtDbModTime:
+                    print("Database Updated - Reading immediately")
+                    needsDbRead = True
+                    lastRtDbModTime = currentModTime
+                elif currentTime - lastRtDbCheck >= DB_CHECK_INTERVAL:
+                    # Periodic check even if file hasn't changed (for safety)
+                    needsDbRead = True
+            except OSError:
+                # File doesn't exist or can't be accessed, try periodic read
+                if currentTime - lastRtDbCheck >= DB_CHECK_INTERVAL:
+                    needsDbRead = True
+
+            if needsDbRead:
+                rtDb = readRtDb()
+                configUpdateAvailable = rtDb.get("configUpdateAvailable", False)
+                lastRtDbCheck = currentTime
+                if configUpdateAvailable:
+                    print("Processing config update from web interface")
+            # If no read needed, use cached rtDb (already initialized above)
 
             # Check for config updates for valves
             if configUpdateAvailable:
                 valve1Duration = rtDb.get("valve1Duration", VALVE1_DEFAULT_DURATION)
                 valve2Duration = rtDb.get("valve2Duration", VALVE2_DEFAULT_DURATION)
-                print(f"Updated valve durations: Valve1={valve1Duration} min, Valve2={valve2Duration} min")
+                print(f"Updated valve durations: Valve1 = {valve1Duration} min, Valve2 = {valve2Duration} min")
 
-            # Morning valve operation
-            if now.hour == MORNING_8AM and not morning8RunDone:
-                print("Morning run: Activating valves.")
-                gpio.output(VALVE1_PIN, True)
-                gpio.output(VALVE2_PIN, True)
-                valve1On = True
-                valve2On = True
-                valve1StartTime = currentTime
-                valve2StartTime = currentTime
-                morning8RunDone = True
+            # Only check for scheduled valve operations once per minute to reduce processing
+            if now.second == 0:  # Only check at the beginning of each minute
+                # Morning valve operation
+                if now.hour == MORNING_8AM and not morning8RunDone:
+                    print("Morning run: Activating valves.")
+                    gpio.output(VALVE1_PIN, True)
+                    gpio.output(VALVE2_PIN, True)
+                    valve1On = True
+                    valve2On = True
+                    valve1StartTime = currentTime
+                    valve2StartTime = currentTime
+                    morning8RunDone = True
 
-            # Afternoon valve operation
-            if now.hour == AFTERNOON_5PM and not aftrn5RunDone:
-                print("Afternoon run: Activating valves.")
-                gpio.output(VALVE1_PIN, True)
-                gpio.output(VALVE2_PIN, True)
-                valve1On = True
-                valve2On = True
-                valve1StartTime = currentTime
-                valve2StartTime = currentTime
-                aftrn5RunDone = True
+                # Afternoon valve operation
+                if now.hour == AFTERNOON_5PM and not aftrn5RunDone:
+                    print("Afternoon run: Activating valves.")
+                    gpio.output(VALVE1_PIN, True)
+                    gpio.output(VALVE2_PIN, True)
+                    valve1On = True
+                    valve2On = True
+                    valve1StartTime = currentTime
+                    valve2StartTime = currentTime
+                    aftrn5RunDone = True
 
-            # Evening valve operation
-            if now.hour == NIGHT_9PM and not evening9RunDone:
-                print("Evening run: Activating valves.")
-                gpio.output(VALVE1_PIN, True)
-                gpio.output(VALVE2_PIN, True)
-                valve1On = True
-                valve2On = True
-                valve1StartTime = currentTime
-                valve2StartTime = currentTime
-                evening9RunDone = True
+                # Evening valve operation
+                if now.hour == NIGHT_9PM and not evening9RunDone:
+                    print("Evening run: Activating valves.")
+                    gpio.output(VALVE1_PIN, True)
+                    gpio.output(VALVE2_PIN, True)
+                    valve1On = True
+                    valve2On = True
+                    valve1StartTime = currentTime
+                    valve2StartTime = currentTime
+                    evening9RunDone = True
 
             # Check to turn off valves
             if valve1On and (currentTime - valve1StartTime >= valve1Duration * 60):
@@ -153,7 +190,13 @@ def main():
             # Original motor logic
             if currentTime - lastCheckTime >= CHECK_INTERVAL_SECONDS:
                 distance = readDistance(gpio, ULTRASONIC_TRIG, ULTRASONIC_ECHO)
-                print(f"Distance: {distance} cm")
+                if distanceIsValid(distance, lastDistance):
+                    print(f"Distance: {distance} cm")
+                    lastDistance = distance
+                else:
+                    print(f"Invalid distance reading: {distance} cm; SKIP;")
+                    time.sleep(0.5)
+                    continue
                 waterLevel = TANK_HEIGHT - distance
                 motorStatus = rtDb.get("motorStatus", "OFF")
 
@@ -206,7 +249,13 @@ def main():
                 lastMotorStatus = motorStatus
                 lastWaterLevel  = waterLevel
 
-            time.sleep(0.1) # Sleep to reduce CPU usage
+            # Smart sleep: shorter sleep when config updates are expected
+            if configUpdateAvailable:
+                # If we just processed a config update, check again sooner
+                time.sleep(0.5)  # Quick follow-up check
+            else:
+                # Normal operation - longer sleep for CPU efficiency
+                time.sleep(1)
     except KeyboardInterrupt:
         cleanupGpio(gpio)
 
