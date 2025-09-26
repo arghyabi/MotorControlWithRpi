@@ -225,8 +225,9 @@ def main():
                     else:
                         gpio.output(MOTOR_PIN, False)
                         print(f"{currentMode} mode - Config update: Motor OFF")
-                # In manual mode, don't change motor status automatically
 
+                if currentMode == "Manual":
+                    pass
 
                 elif currentMode == "Auto":
                     # Standard automatic control logic
